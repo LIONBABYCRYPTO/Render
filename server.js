@@ -1,328 +1,292 @@
-// server.js - CORRECT API VERSION
-require('dotenv').config();
 const express = require('express');
-const axios = require('axios');
 const cors = require('cors');
+const path = require('path');
+const fs = require('fs').promises;
+const axios = require('axios');
+const sharp = require('sharp');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.static('public'));
+app.use('/generated', express.static('generated'));
 
-// ✅ YOUR CORRECT API CONFIGURATION
-const API_KEY = process.env.COMFY_API_KEY || process.env.API_KEY;
-console.log('='.repeat(60));
-console.log('🎯 API CONFIGURATION');
-console.log('='.repeat(60));
-console.log('API Key:', API_KEY ? '✅ Loaded' : '❌ Missing');
-console.log('='.repeat(60));
-
-// Health check
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        service: 'Fire Horse Generator',
-        api_configured: !!API_KEY,
-        endpoints: ['/health', '/generate', '/test-all-apis']
-    });
-});
-
-// ✅ TEST ALL POSSIBLE API SERVICES
-app.get('/test-all-apis', async (req, res) => {
-    console.log('Testing all possible API services...');
-    
-    const testResults = [];
-    
-    // Test 1: OpenAI-compatible API (MOST LIKELY!)
+// Create directories if they don't exist
+async function ensureDirectories() {
     try {
-        console.log('Testing: OpenAI-compatible API...');
-        const response = await axios.post(
-            'https://api.openai.com/v1/images/generations',
-            {
-                model: "dall-e-3",
-                prompt: "test",
-                n: 1,
-                size: "256x256"
+        await fs.mkdir('generated', { recursive: true });
+    } catch (err) {
+        console.error('Error creating directories:', err);
+    }
+}
+
+// ComfyUI API Configuration
+const COMFYUI_API_URL = 'https://comfyui-proxy.onrender.com';
+const COMFY_API_KEY = process.env.COMFY_API_KEY || 'sk-adREr3pU49iPRSkj7sBCa7NDMpWtV9NuMoiqNfylHCl9GP9u';
+
+// Default workflow (you may need to adjust based on your ComfyUI setup)
+const DEFAULT_WORKFLOW = {
+    "prompt": {
+        "3": {
+            "inputs": {
+                "seed": 42,
+                "steps": 20,
+                "cfg": 8,
+                "sampler_name": "euler",
+                "scheduler": "normal",
+                "denoise": 1,
+                "model": [
+                    "4",
+                    0
+                ],
+                "positive": [
+                    "6",
+                    0
+                ],
+                "negative": [
+                    "7",
+                    0
+                ],
+                "latent_image": [
+                    "5",
+                    0
+                ]
             },
+            "class_type": "KSampler"
+        },
+        "4": {
+            "inputs": {
+                "ckpt_name": "v1-5-pruned-emaonly.ckpt"
+            },
+            "class_type": "CheckpointLoaderSimple"
+        },
+        "5": {
+            "inputs": {
+                "width": 512,
+                "height": 512,
+                "batch_size": 1
+            },
+            "class_type": "EmptyLatentImage"
+        },
+        "6": {
+            "inputs": {
+                "text": "beautiful scenery",
+                "clip": [
+                    "4",
+                    1
+                ]
+            },
+            "class_type": "CLIPTextEncode"
+        },
+        "7": {
+            "inputs": {
+                "text": "ugly, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, extra limbs, disfigured, deformed, body out of frame, blurry, bad anatomy, blurred, watermark, grainy, signature, cut off, draft",
+                "clip": [
+                    "4",
+                    1
+                ]
+            },
+            "class_type": "CLIPTextEncode"
+        },
+        "8": {
+            "inputs": {
+                "samples": [
+                    "3",
+                    0
+                ],
+                "vae": [
+                    "4",
+                    2
+                ]
+            },
+            "class_type": "VAEDecode"
+        },
+        "9": {
+            "inputs": {
+                "filename_prefix": "ComfyUI",
+                "images": [
+                    "8",
+                    0
+                ]
+            },
+            "class_type": "SaveImage"
+        }
+    }
+};
+
+// Generate image endpoint
+app.post('/api/generate', async (req, res) => {
+    try {
+        const { prompt, negative_prompt = "", width = 512, height = 512 } = req.body;
+        
+        if (!prompt) {
+            return res.status(400).json({ error: 'Prompt is required' });
+        }
+
+        // Clone the workflow and update with user inputs
+        const workflow = JSON.parse(JSON.stringify(DEFAULT_WORKFLOW));
+        workflow.prompt["6"].inputs.text = prompt;
+        workflow.prompt["7"].inputs.text = negative_prompt;
+        workflow.prompt["5"].inputs.width = width;
+        workflow.prompt["5"].inputs.height = height;
+
+        // Generate a unique seed
+        const seed = Math.floor(Math.random() * 4294967295);
+        workflow.prompt["3"].inputs.seed = seed;
+
+        console.log('Sending request to ComfyUI...');
+
+        // Queue prompt
+        const queueResponse = await axios.post(
+            `${COMFYUI_API_URL}/api/v1/prompts`,
+            { prompt: workflow.prompt },
             {
                 headers: {
-                    'Authorization': `Bearer ${API_KEY}`,
+                    'Authorization': `Bearer ${COMFY_API_KEY}`,
                     'Content-Type': 'application/json'
-                },
-                timeout: 10000
-            }
-        );
-        testResults.push({
-            service: 'OpenAI-compatible',
-            status: '✅ WORKING',
-            details: response.data
-        });
-    } catch (error) {
-        testResults.push({
-            service: 'OpenAI-compatible',
-            status: `❌ Failed (${error.response?.status || error.code})`
-        });
-    }
-    
-    // Test 2: Stability AI
-    try {
-        console.log('Testing: Stability AI...');
-        const response = await axios.post(
-            'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image',
-            {
-                text_prompts: [{ text: "test" }],
-                cfg_scale: 7,
-                height: 256,
-                width: 256,
-                steps: 10,
-                samples: 1
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000
-            }
-        );
-        testResults.push({
-            service: 'Stability AI',
-            status: '✅ WORKING',
-            details: response.data
-        });
-    } catch (error) {
-        testResults.push({
-            service: 'Stability AI',
-            status: `❌ Failed (${error.response?.status || error.code})`
-        });
-    }
-    
-    // Test 3: Replicate
-    try {
-        console.log('Testing: Replicate...');
-        const response = await axios.post(
-            'https://api.replicate.com/v1/predictions',
-            {
-                version: "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
-                input: {
-                    prompt: "test",
-                    width: 256,
-                    height: 256
                 }
-            },
-            {
-                headers: {
-                    'Authorization': `Token ${API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000
             }
         );
-        testResults.push({
-            service: 'Replicate',
-            status: '✅ WORKING',
-            details: response.data
-        });
+
+        const promptId = queueResponse.data.prompt_id;
+        console.log('Prompt queued with ID:', promptId);
+
+        // Poll for completion
+        let imageData = null;
+        let attempts = 0;
+        const maxAttempts = 50;
+
+        while (!imageData && attempts < maxAttempts) {
+            attempts++;
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            try {
+                const historyResponse = await axios.get(
+                    `${COMFYUI_API_URL}/api/v1/history/${promptId}`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${COMFY_API_KEY}`
+                        }
+                    }
+                );
+
+                const history = historyResponse.data;
+                if (history && history[promptId]) {
+                    const outputs = history[promptId].outputs;
+                    for (const nodeId in outputs) {
+                        const nodeOutput = outputs[nodeId];
+                        if (nodeOutput.images && nodeOutput.images.length > 0) {
+                            const image = nodeOutput.images[0];
+                            const imageUrl = `${COMFYUI_API_URL}/api/v1/view?filename=${image.filename}&subfolder=${image.subfolder}&type=${image.type}`;
+                            
+                            // Download the image
+                            const imageResponse = await axios.get(imageUrl, {
+                                responseType: 'arraybuffer',
+                                headers: {
+                                    'Authorization': `Bearer ${COMFY_API_KEY}`
+                                }
+                            });
+
+                            // Generate unique filename
+                            const filename = `image_${uuidv4()}.png`;
+                            const filepath = path.join(__dirname, 'generated', filename);
+                            
+                            // Save the image
+                            await sharp(imageResponse.data)
+                                .png()
+                                .toFile(filepath);
+
+                            // Create thumbnail
+                            const thumbnailName = `thumb_${filename}`;
+                            const thumbnailPath = path.join(__dirname, 'generated', thumbnailName);
+                            await sharp(imageResponse.data)
+                                .resize(200, 200, { fit: 'cover' })
+                                .toFile(thumbnailPath);
+
+                            imageData = {
+                                url: `/generated/${filename}`,
+                                thumbnail: `/generated/${thumbnailName}`,
+                                prompt: prompt,
+                                timestamp: new Date().toISOString(),
+                                seed: seed
+                            };
+                            break;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.log(`Attempt ${attempts}: Still processing...`);
+            }
+        }
+
+        if (!imageData) {
+            throw new Error('Image generation timed out');
+        }
+
+        res.json(imageData);
+
     } catch (error) {
-        testResults.push({
-            service: 'Replicate',
-            status: `❌ Failed (${error.response?.status || error.code})`
+        console.error('Error generating image:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate image', 
+            details: error.message 
         });
     }
-    
-    res.json({
-        success: true,
-        api_key_preview: API_KEY ? API_KEY.substring(0, 12) + '...' : 'No key',
-        test_results: testResults,
-        recommendation: 'Check which service works with your key'
-    });
 });
 
-// ✅ MAIN GENERATION - DYNAMIC API DETECTION
-app.post('/generate', async (req, res) => {
-    const { prompt, style = 'digital' } = req.body;
-    
-    if (!prompt) {
-        return res.status(400).json({ error: 'Prompt required' });
-    }
-    
-    console.log(`Generating: "${prompt.substring(0, 50)}..."`);
-    
-    // Enhance prompt for fire horse theme
-    const enhancedPrompt = `Fire Dragon Horse, ${prompt}, Chinese New Year theme, ${style} style, detailed, epic`;
-    
-    // Try OpenAI-compatible API first (most likely)
+// Get gallery images
+app.get('/api/gallery', async (req, res) => {
     try {
-        console.log('Trying OpenAI-compatible API...');
+        const files = await fs.readdir('generated');
+        const images = [];
         
-        const response = await axios.post(
-            'https://api.openai.com/v1/images/generations',
-            {
-                model: "dall-e-3",
-                prompt: enhancedPrompt,
-                n: 1,
-                size: "1024x1024",
-                quality: "standard",
-                style: "vivid",
-                response_format: "url"
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 120000
+        for (const file of files) {
+            if (file.startsWith('image_') && file.endsWith('.png')) {
+                const thumbnail = `thumb_${file}`;
+                const stats = await fs.stat(path.join('generated', file));
+                
+                images.push({
+                    url: `/generated/${file}`,
+                    thumbnail: `/generated/${thumbnail}`,
+                    timestamp: stats.mtime.toISOString(),
+                    prompt: 'Generated image' // You might want to store prompts separately
+                });
             }
-        );
-        
-        if (response.data.data && response.data.data[0]) {
-            console.log('✅ OpenAI API Success!');
-            
-            return res.json({
-                success: true,
-                image_url: response.data.data[0].url,
-                prompt: prompt,
-                enhanced_prompt: enhancedPrompt,
-                source: 'openai_api',
-                message: '🎉 Fire Horse created with AI!'
-            });
         }
-    } catch (openaiError) {
-        console.log('OpenAI failed:', openaiError.response?.status || openaiError.message);
-    }
-    
-    // Try Stability AI as fallback
-    try {
-        console.log('Trying Stability AI...');
         
-        const response = await axios.post(
-            'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image',
-            {
-                text_prompts: [{ text: enhancedPrompt }],
-                cfg_scale: 7,
-                height: 1024,
-                width: 1024,
-                steps: 30,
-                samples: 1
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${API_KEY}`,
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                timeout: 120000
-            }
-        );
+        // Sort by most recent first
+        images.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         
-        if (response.data.artifacts && response.data.artifacts[0]) {
-            const base64Image = response.data.artifacts[0].base64;
-            console.log('✅ Stability AI Success!');
-            
-            return res.json({
-                success: true,
-                image_url: `data:image/png;base64,${base64Image}`,
-                prompt: prompt,
-                enhanced_prompt: enhancedPrompt,
-                source: 'stability_ai',
-                message: '🎉 Fire Horse created with AI!'
-            });
-        }
-    } catch (stabilityError) {
-        console.log('Stability AI failed:', stabilityError.response?.status || stabilityError.message);
+        res.json(images);
+    } catch (error) {
+        console.error('Error reading gallery:', error);
+        res.status(500).json({ error: 'Failed to load gallery' });
     }
-    
-    // If all APIs fail, use high-quality curated images
-    console.log('Using curated high-quality images');
-    
-    // Curated fire horse images (not random Unsplash)
-    const curatedImages = {
-        'digital': [
-            'https://i.imgur.com/XQKjZP2.png', // Fire dragon horse 1
-            'https://i.imgur.com/9yZbQ8R.png', // Fire dragon horse 2
-            'https://i.imgur.com/5pFwYqG.png'  // Crypto dragon
-        ],
-        'chinese': [
-            'https://i.imgur.com/3qLxV8T.png', // Chinese ink horse 1
-            'https://i.imgur.com/7tMpK9B.png', // Chinese ink horse 2
-            'https://i.imgur.com/2rQsLwD.png'  // Traditional dragon
-        ],
-        'cyberpunk': [
-            'https://i.imgur.com/8sWvR9F.png', // Cyber horse 1
-            'https://i.imgur.com/4nPqT7c.png', // Cyber horse 2
-            'https://i.imgur.com/1mJvZ3x.png'  // Neon dragon
-        ],
-        'fantasy': [
-            'https://i.imgur.com/6tYv8zN.png', // Fantasy horse 1
-            'https://i.imgur.com/9sKpL2R.png', // Fantasy horse 2
-            'https://i.imgur.com/3rPwQ8S.png'  // Magic dragon
-        ]
-    };
-    
-    const styleImages = curatedImages[style] || curatedImages.digital;
-    const randomImage = styleImages[Math.floor(Math.random() * styleImages.length)];
-    
-    res.json({
-        success: true,
-        image_url: randomImage,
-        prompt: prompt,
-        enhanced_prompt: enhancedPrompt,
-        source: 'curated_images',
-        message: '🔥 Fire Horse created successfully!'
-    });
 });
 
-// ✅ SIMPLE GALLERY ENDPOINT
-let artworks = [];
-app.get('/gallery', (req, res) => {
-    // If no artworks yet, create some samples
-    if (artworks.length === 0) {
-        artworks = [
-            {
-                id: 1,
-                prompt: "Fire Dragon Horse with golden scales and cryptocurrency background",
-                image_url: "https://i.imgur.com/XQKjZP2.png",
-                style: "digital",
-                likes: 42,
-                created_at: new Date().toISOString()
-            },
-            {
-                id: 2,
-                prompt: "Chinese ink painting of a fire horse running through mountains",
-                image_url: "https://i.imgur.com/3qLxV8T.png",
-                style: "chinese",
-                likes: 38,
-                created_at: new Date().toISOString()
-            },
-            {
-                id: 3,
-                prompt: "Cyberpunk mechanical fire horse in neon city",
-                image_url: "https://i.imgur.com/8sWvR9F.png",
-                style: "cyberpunk",
-                likes: 51,
-                created_at: new Date().toISOString()
-            }
-        ];
-    }
-    
-    res.json({
-        success: true,
-        artworks: artworks,
-        stats: {
-            totalArtworks: artworks.length,
-            totalLikes: artworks.reduce((sum, art) => sum + art.likes, 0),
-            todayArtworks: artworks.length
-        }
-    });
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Serve index.html for all other routes (SPA support)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Fire Horse Generator running on port ${PORT}`);
-    console.log(`📡 Health: http://localhost:${PORT}/health`);
-    console.log(`🔍 Test APIs: http://localhost:${PORT}/test-all-apis`);
-    console.log(`🎨 Generate: POST http://localhost:${PORT}/generate`);
-    console.log(`🖼️ Gallery: GET http://localhost:${PORT}/gallery`);
-});
+async function startServer() {
+    await ensureDirectories();
+    
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`Gallery available at http://localhost:${PORT}`);
+        console.log(`API available at http://localhost:${PORT}/api`);
+    });
+}
+
+startServer();
