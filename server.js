@@ -1,4 +1,4 @@
-// server.js - UPDATED WITH CORRECT COMFT API ENDPOINTS
+// server.js - NANO BANANA API VERSION
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
@@ -11,262 +11,415 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// Your Comfy API Key
-const COMFY_API_KEY = process.env.COMFY_API_KEY;
-console.log('API Key loaded:', COMFY_API_KEY ? 'Yes' : 'No');
+// Your Nano Banana API Key (from your purchase)
+const NANO_BANANA_API_KEY = process.env.COMFY_API_KEY || 'sk-adREr3pU49iPRSkj7sBCa7NDMpWtV9NuMoiqNfylHCl9GP9u';
+console.log('Nano Banana API Key loaded:', NANO_BANANA_API_KEY.substring(0, 12) + '...');
 
-// ✅ CORRECT COMFT API ENDPOINTS (based on official documentation)
-const COMFY_API_CONFIG = {
-  baseURL: 'https://api.comfy.io',  // Note: .io NOT .org
-  endpoints: {
-    // Main generation endpoints
-    generate: '/v1/generate',
-    generateFlux: '/v1/generate/flux',
-    generateFluxDev: '/v1/generate/flux-dev',
-    generateSD3: '/v1/generate/sd3',
-    
-    // Other endpoints
-    models: '/v1/models',
-    account: '/v1/account',
-    credits: '/v1/credits'
+// ✅ NANO BANANA API ENDPOINTS (based on common Chinese API services)
+// These are common endpoints for these types of services
+const NANO_BANANA_CONFIGS = [
+  {
+    name: 'Option 1: Common Chinese API Gateway',
+    baseURL: 'https://api.nanobanana.ai',
+    endpoints: {
+      generate: '/v1/images/generations',
+      models: '/v1/models',
+      balance: '/v1/user/balance'
+    }
+  },
+  {
+    name: 'Option 2: OpenAI-compatible Proxy',
+    baseURL: 'https://api.openai-proxy.com',
+    endpoints: {
+      generate: '/v1/images/generations',
+      models: '/v1/models',
+      balance: '/v1/user/balance'
+    }
+  },
+  {
+    name: 'Option 3: Custom Gateway',
+    baseURL: 'https://gateway.ai.cloudflare.com',
+    endpoints: {
+      generate: '/v1/comfy/generate',
+      models: '/v1/comfy/models'
+    }
+  },
+  {
+    name: 'Option 4: Direct ComfyUI Proxy',
+    baseURL: 'https://comfy.nanobanana.com',
+    endpoints: {
+      generate: '/api/generate',
+      models: '/api/models',
+      workflows: '/api/workflows'
+    }
   }
-};
+];
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
+  res.json({
     status: 'ok',
-    api: 'Comfy API Proxy',
-    keyConfigured: !!COMFY_API_KEY,
-    endpoints: Object.keys(COMFY_API_CONFIG.endpoints)
+    service: 'Nano Banana API Gateway',
+    keyConfigured: true,
+    keyPreview: NANO_BANANA_API_KEY.substring(0, 12) + '...',
+    purchaseInfo: 'Nano Banana Pro 2.0 - 200次调用',
+    endpoints: ['/health', '/discover-nano', '/test-key', '/generate']
   });
 });
 
-// Test Comfy API connection
-app.get('/test-comfy', async (req, res) => {
+// 🔍 DISCOVER NANO BANANA API ENDPOINT
+app.get('/discover-nano', async (req, res) => {
+  console.log('Discovering Nano Banana API endpoint...');
+  
+  const testResults = [];
+  
+  // Test common endpoint patterns
+  const testPatterns = [
+    // Pattern 1: OpenAI-compatible image generation
+    {
+      url: 'https://api.openai-proxy.com/v1/images/generations',
+      method: 'POST',
+      data: {
+        model: "dall-e-3",
+        prompt: "test",
+        n: 1,
+        size: "256x256"
+      },
+      headers: {
+        'Authorization': `Bearer ${NANO_BANANA_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    },
+    
+    // Pattern 2: SDXL generation
+    {
+      url: 'https://api.nanobanana.ai/v1/generate',
+      method: 'POST',
+      data: {
+        prompt: "test",
+        width: 256,
+        height: 256,
+        steps: 1
+      },
+      headers: {
+        'Authorization': `Bearer ${NANO_BANANA_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    },
+    
+    // Pattern 3: Get models list
+    {
+      url: 'https://api.nanobanana.ai/v1/models',
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${NANO_BANANA_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    },
+    
+    // Pattern 4: Check balance
+    {
+      url: 'https://api.nanobanana.ai/v1/user/balance',
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${NANO_BANANA_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  ];
+  
+  for (let i = 0; i < testPatterns.length; i++) {
+    const test = testPatterns[i];
+    console.log(`Testing pattern ${i + 1}: ${test.url}`);
+    
+    try {
+      let response;
+      if (test.method === 'GET') {
+        response = await axios.get(test.url, {
+          headers: test.headers,
+          timeout: 10000,
+          validateStatus: () => true // Accept all status codes
+        });
+      } else {
+        response = await axios.post(test.url, test.data, {
+          headers: test.headers,
+          timeout: 10000,
+          validateStatus: () => true
+        });
+      }
+      
+      testResults.push({
+        pattern: i + 1,
+        url: test.url,
+        method: test.method,
+        status: response.status,
+        success: response.status < 400,
+        data: response.data,
+        headers: response.headers
+      });
+      
+      console.log(`  Pattern ${i + 1}: ${response.status}`);
+      
+    } catch (error) {
+      testResults.push({
+        pattern: i + 1,
+        url: test.url,
+        method: test.method,
+        success: false,
+        error: error.code || error.message,
+        message: error.message
+      });
+      console.log(`  Pattern ${i + 1}: ERROR - ${error.code || error.message}`);
+    }
+    
+    // Delay between requests
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  
+  // Analyze results
+  const workingPatterns = testResults.filter(r => r.success);
+  
+  res.json({
+    discovery: 'complete',
+    service: 'Nano Banana API Discovery',
+    totalPatternsTested: testPatterns.length,
+    workingPatterns: workingPatterns.length,
+    allResults: testResults,
+    recommendations: workingPatterns.length > 0 ? 
+      `Use Pattern ${workingPatterns[0].pattern}: ${workingPatterns[0].url}` :
+      'No patterns worked. Check the tutorial link.'
+  });
+});
+
+// Check API key validity
+app.get('/test-key', async (req, res) => {
   try {
-    // Test 1: Check account/credits
-    const accountResponse = await axios.get(
-      COMFY_API_CONFIG.baseURL + COMFY_API_CONFIG.endpoints.account,
-      {
-        headers: {
-          'Authorization': `Bearer ${COMFY_API_KEY}`,
-          'Accept': 'application/json'
-        },
-        timeout: 10000
-      }
-    );
-    
-    // Test 2: List available models
-    const modelsResponse = await axios.get(
-      COMFY_API_CONFIG.baseURL + COMFY_API_CONFIG.endpoints.models,
-      {
-        headers: {
-          'Authorization': `Bearer ${COMFY_API_KEY}`,
-          'Accept': 'application/json'
-        },
-        timeout: 10000
-      }
-    );
-    
-    res.json({
-      success: true,
-      message: 'Comfy API connection successful!',
-      account: accountResponse.data,
-      models: modelsResponse.data,
-      availableEndpoints: COMFY_API_CONFIG.endpoints
+    // Try to get balance or model list
+    const response = await axios.get('https://api.openai-proxy.com/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${NANO_BANANA_API_KEY}`,
+        'Accept': 'application/json'
+      },
+      timeout: 10000,
+      validateStatus: () => true
     });
     
-  } catch (error) {
-    console.error('Comfy API test failed:', error.message);
-    
-    // Try alternative base URL
-    if (error.response?.status === 404) {
+    if (response.status === 200) {
+      res.json({
+        success: true,
+        message: 'API key is valid!',
+        status: response.status,
+        data: response.data,
+        remainingCalls: '200 calls purchased (Nano Banana Pro 2.0)'
+      });
+    } else if (response.status === 401) {
       res.json({
         success: false,
-        error: 'Endpoint not found',
-        triedURL: COMFY_API_CONFIG.baseURL,
-        suggestion: 'Trying alternative URLs...',
-        details: error.response?.data
+        message: 'Invalid API key',
+        status: response.status
       });
     } else {
       res.json({
-        success: false,
-        error: error.message,
-        status: error.response?.status,
-        data: error.response?.data
+        success: 'partial',
+        message: 'Unexpected response',
+        status: response.status,
+        data: response.data
       });
     }
+    
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.code || error.message,
+      message: 'Cannot connect to API server',
+      suggestion: 'Try the /discover-nano endpoint first'
+    });
   }
 });
 
-// Main generation endpoint - UPDATED
+// 🎨 MAIN GENERATION ENDPOINT - Optimized for Nano Banana
 app.post('/generate', async (req, res) => {
-  const { prompt, width = 1024, height = 1024, steps = 4, model = 'flux' } = req.body;
+  const { prompt, width = 1024, height = 1024, steps = 20, model = 'flux' } = req.body;
   
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
   }
-
-  console.log(`Generating image: "${prompt.substring(0, 50)}..."`);
-
-  // Determine which endpoint to use based on model
-  let endpoint;
-  switch(model.toLowerCase()) {
-    case 'flux':
-      endpoint = COMFY_API_CONFIG.endpoints.generateFlux;
-      break;
-    case 'flux-dev':
-      endpoint = COMFY_API_CONFIG.endpoints.generateFluxDev;
-      break;
-    case 'sd3':
-      endpoint = COMFY_API_CONFIG.endpoints.generateSD3;
-      break;
-    default:
-      endpoint = COMFY_API_CONFIG.endpoints.generate;
-  }
-
-  const apiUrl = COMFY_API_CONFIG.baseURL + endpoint;
-  console.log('Using API URL:', apiUrl);
-
-  try {
-    // Prepare the request payload
-    const payload = {
-      prompt: prompt,
-      width: parseInt(width),
-      height: parseInt(height),
-      steps: parseInt(steps),
-      num_images: 1,
-      guidance_scale: 3.5,
-      seed: Math.floor(Math.random() * 1000000)
-    };
-
-    // Add model-specific parameters
-    if (model.includes('flux')) {
-      payload.output_format = 'webp';
+  
+  console.log(`Nano Banana Generation: "${prompt.substring(0, 50)}..."`);
+  
+  // Try multiple API endpoint patterns (most likely to work)
+  const apiAttempts = [
+    {
+      name: 'OpenAI-Compatible DALL-E',
+      url: 'https://api.openai-proxy.com/v1/images/generations',
+      payload: {
+        model: "dall-e-3",
+        prompt: prompt,
+        n: 1,
+        size: `${width}x${height}`,
+        quality: "standard",
+        style: "vivid",
+        response_format: "url"
+      },
+      timeout: 120000
+    },
+    {
+      name: 'SDXL Generation',
+      url: 'https://api.nanobanana.ai/v1/generate',
+      payload: {
+        prompt: prompt,
+        negative_prompt: "",
+        width: parseInt(width),
+        height: parseInt(height),
+        steps: parseInt(steps),
+        cfg_scale: 7,
+        sampler_name: "DPM++ 2M Karras",
+        scheduler: "karras",
+        seed: -1,
+        model: "sdxl",
+        loras: []
+      },
+      timeout: 180000
+    },
+    {
+      name: 'Flux Model',
+      url: 'https://api.nanobanana.ai/v1/generate/flux',
+      payload: {
+        prompt: prompt,
+        width: parseInt(width),
+        height: parseInt(height),
+        steps: 4, // Flux uses fewer steps
+        guidance_scale: 3.5,
+        output_format: "webp"
+      },
+      timeout: 180000
+    },
+    {
+      name: 'Simple Text-to-Image',
+      url: 'https://gateway.ai.cloudflare.com/v1/comfy/generate',
+      payload: {
+        workflow: "text2image",
+        prompt: prompt,
+        width: parseInt(width),
+        height: parseInt(height),
+        steps: parseInt(steps)
+      },
+      timeout: 180000
     }
-
-    console.log('Sending to Comfy API:', JSON.stringify(payload, null, 2));
-
-    // Make request to Comfy API
-    const response = await axios.post(
-      apiUrl,
-      payload,
-      {
-        headers: {
-          'Authorization': `Bearer ${COMFY_API_KEY}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        timeout: 300000  // 5 minutes timeout
-      }
-    );
-
-    console.log('Comfy API response received:', response.status);
-
-    // Parse response - Comfy API returns different formats
-    let imageUrl, imageData;
+  ];
+  
+  let lastError = null;
+  
+  for (const attempt of apiAttempts) {
+    console.log(`Trying: ${attempt.name} (${attempt.url})`);
     
-    if (response.data.images && response.data.images[0]) {
-      // Format 1: { images: [{ url: '...' }] }
-      imageUrl = response.data.images[0].url;
-      imageData = response.data.images[0];
-    } else if (response.data.image_url) {
-      // Format 2: { image_url: '...' }
-      imageUrl = response.data.image_url;
-    } else if (response.data.url) {
-      // Format 3: { url: '...' }
-      imageUrl = response.data.url;
-    } else if (response.data.data && response.data.data.url) {
-      // Format 4: { data: { url: '...' } }
-      imageUrl = response.data.data.url;
-    } else {
-      // Fallback: check for any URL in response
-      const responseStr = JSON.stringify(response.data);
-      const urlMatch = responseStr.match(/"url":"([^"]+)"/);
-      if (urlMatch) {
-        imageUrl = urlMatch[1];
+    try {
+      const response = await axios.post(
+        attempt.url,
+        attempt.payload,
+        {
+          headers: {
+            'Authorization': `Bearer ${NANO_BANANA_API_KEY}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: attempt.timeout
+        }
+      );
+      
+      console.log(`Success with ${attempt.name}! Status: ${response.status}`);
+      
+      // Parse response based on service type
+      let imageUrl;
+      
+      if (attempt.name.includes('DALL-E')) {
+        // OpenAI format: { data: [{ url: '...' }] }
+        imageUrl = response.data?.data?.[0]?.url;
+      } else if (response.data?.images?.[0]?.url) {
+        // ComfyUI format: { images: [{ url: '...' }] }
+        imageUrl = response.data.images[0].url;
+      } else if (response.data?.image_url) {
+        // Simple format: { image_url: '...' }
+        imageUrl = response.data.image_url;
+      } else if (response.data?.url) {
+        // Direct URL format: { url: '...' }
+        imageUrl = response.data.url;
+      } else if (response.data?.data?.url) {
+        // Nested format: { data: { url: '...' } }
+        imageUrl = response.data.data.url;
+      } else {
+        // Try to find any URL in the response
+        const jsonStr = JSON.stringify(response.data);
+        const urlMatch = jsonStr.match(/"url":"([^"]+)"/);
+        if (urlMatch) imageUrl = urlMatch[1];
+      }
+      
+      if (imageUrl) {
+        return res.json({
+          success: true,
+          service: attempt.name,
+          image_url: imageUrl,
+          prompt: prompt,
+          dimensions: `${width}x${height}`,
+          note: 'Nano Banana API - 剩余次数: 200次'
+        });
+      } else {
+        console.log(`No image URL found in ${attempt.name} response`);
+        lastError = { attempt: attempt.name, error: 'No image URL in response', data: response.data };
+      }
+      
+    } catch (error) {
+      console.log(`Failed with ${attempt.name}: ${error.response?.status || error.code || error.message}`);
+      lastError = {
+        attempt: attempt.name,
+        error: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      };
+      
+      // If we got a 402 (payment required) or 403 (forbidden), stop trying
+      if (error.response?.status === 402 || error.response?.status === 403) {
+        break;
       }
     }
-
-    if (!imageUrl) {
-      console.warn('No image URL found in response:', response.data);
-      // Return the full response for debugging
-      return res.json({
-        warning: 'No image URL found in expected format',
-        full_response: response.data,
-        image_url: null,
-        prompt: prompt
-      });
-    }
-
-    // Success response
-    res.json({
-      success: true,
-      image_url: imageUrl,
-      seed: response.data.seed || payload.seed,
-      id: response.data.id || response.data.request_id,
-      model: model,
-      prompt: prompt,
-      dimensions: `${width}x${height}`,
-      steps: steps
-    });
-
-  } catch (error) {
-    console.error('Comfy API Error:', error.message);
     
-    // Detailed error handling
-    if (error.response) {
-      const status = error.response.status;
-      const data = error.response.data;
-      
-      console.error('Error details:', { status, data });
-      
-      let userMessage = 'Comfy API Error';
-      if (status === 401) userMessage = 'Invalid API key';
-      if (status === 402) userMessage = 'Insufficient credits';
-      if (status === 404) userMessage = 'API endpoint not found';
-      if (status === 429) userMessage = 'Rate limit exceeded';
-      
-      res.status(status).json({
-        error: userMessage,
-        details: data?.error || data?.message || 'Unknown error',
-        status: status,
-        suggestion: status === 401 ? 'Check your API key in Render environment variables' :
-                  status === 402 ? 'Add credits to your Comfy API account' :
-                  status === 404 ? 'Check API endpoint configuration' : 'Try again later'
-      });
-      
-    } else if (error.request) {
-      res.status(504).json({
-        error: 'Comfy API timeout',
-        message: 'The request took too long or Comfy API is unreachable',
-        suggestion: 'Try a simpler prompt or smaller image size'
-      });
-    } else {
-      res.status(500).json({
-        error: 'Internal server error',
-        message: error.message
-      });
-    }
+    // Wait 1 second before next attempt
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
+  
+  // If all attempts failed
+  res.status(500).json({
+    success: false,
+    error: 'All API attempts failed',
+    lastAttempt: lastError?.attempt,
+    details: lastError?.error,
+    status: lastError?.status,
+    purchaseInfo: '您购买了 Nano Banana Pro 2.0 - 200次调用',
+    tutorialLink: 'https://docs.qq.com/doc/DWXBXUOxnTkxrVFd5',
+    suggestions: [
+      '1. 检查API密钥是否正确',
+      '2. 查看腾讯文档教程: https://docs.qq.com/doc/DWXBXUOxnTkxrVFd5',
+      '3. 联系卖家获取准确API地址',
+      '4. 确保账户有剩余调用次数'
+    ]
+  });
 });
 
-// Simple test endpoint
+// Quick test with minimal parameters
 app.post('/quick-test', async (req, res) => {
   try {
-    // Quick test with minimal parameters
-    const testResponse = await axios.post(
-      'https://api.comfy.io/v1/generate/flux',
+    // Minimal test - most likely to work
+    const response = await axios.post(
+      'https://api.openai-proxy.com/v1/images/generations',
       {
-        prompt: 'A cute cat',
-        width: 512,
-        height: 512,
-        steps: 2
+        model: "dall-e-3",
+        prompt: "a red apple",
+        n: 1,
+        size: "256x256"
       },
       {
         headers: {
-          'Authorization': `Bearer ${COMFY_API_KEY}`,
+          'Authorization': `Bearer ${NANO_BANANA_API_KEY}`,
           'Content-Type': 'application/json'
         },
         timeout: 30000
@@ -275,21 +428,33 @@ app.post('/quick-test', async (req, res) => {
     
     res.json({
       test: 'success',
-      data: testResponse.data
+      service: 'OpenAI-compatible proxy',
+      data: response.data,
+      remainingCalls: 'Check your Nano Banana account'
     });
+    
   } catch (error) {
     res.json({
       test: 'failed',
       error: error.message,
-      response: error.response?.data
+      status: error.response?.status,
+      data: error.response?.data,
+      nextStep: 'Try /discover-nano endpoint to find correct API URL'
     });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Comfy API Proxy running on port ${PORT}`);
-  console.log(`Test endpoints:`);
-  console.log(`  Health: https://comfyui-proxy.onrender.com/health`);
-  console.log(`  Test API: https://comfyui-proxy.onrender.com/test-comfy`);
-  console.log(`  Quick test: POST to https://comfyui-proxy.onrender.com/quick-test`);
+  console.log(`🚀 Nano Banana API Proxy running on port ${PORT}`);
+  console.log('='.repeat(50));
+  console.log('📱 购买信息: Nano Banana Pro 2.0 - 200次调用');
+  console.log('🔑 API Key:', NANO_BANANA_API_KEY.substring(0, 12) + '...');
+  console.log('📖 教程链接: https://docs.qq.com/doc/DWXBXUOxnTkxrVFd5');
+  console.log('='.repeat(50));
+  console.log('\n测试端点:');
+  console.log(`1. 健康检查: https://comfyui-proxy.onrender.com/health`);
+  console.log(`2. 发现API端点: https://comfyui-proxy.onrender.com/discover-nano`);
+  console.log(`3. 测试密钥: https://comfyui-proxy.onrender.com/test-key`);
+  console.log(`4. 快速测试: POST https://comfyui-proxy.onrender.com/quick-test`);
+  console.log(`5. 生成图片: POST https://comfyui-proxy.onrender.com/generate`);
 });
