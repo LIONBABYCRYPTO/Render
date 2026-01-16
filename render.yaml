@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: comfyui-proxy
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: COMFY_API_KEY
+        sync: false  # You'll set this in Render dashboard
+    plan: free
