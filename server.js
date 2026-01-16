@@ -1,11 +1,8 @@
-// server.js - Complete Backend with Gallery System
+// server.js - GEMINI API VERSION
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
-const { open } = require('sqlite');
-const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -13,406 +10,428 @@ const PORT = process.env.PORT || 10000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
-// API Configuration
+// 🔧 CONFIGURATION - From the Python code
 const GEMINI_API_KEY = process.env.COMFY_API_KEY || 'sk-adREr3pU49iPRSkj7sBCa7NDMpWtV9NuMoiqNfylHCl9GP9u';
-const GEMINI_BASE_URL = 'https://api.mmw.ink';
-const GEMINI_MODEL = 'gemini-3-pro-image-preview-2k';
+const GEMINI_BASE_URL = 'https://api.mmw.ink'; // From the Python code
+const GEMINI_MODEL = 'gemini-3-pro-image-preview-2k'; // From the Python code
 
-// Database setup
-let db;
-(async () => {
-    try {
-        db = await open({
-            filename: path.join(__dirname, 'gallery.db'),
-            driver: sqlite3.Database
-        });
-
-        // Create artworks table
-        await db.exec(`
-            CREATE TABLE IF NOT EXISTS artworks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                prompt TEXT NOT NULL,
-                image_url TEXT NOT NULL,
-                style TEXT DEFAULT 'digital',
-                user_ip TEXT,
-                user_agent TEXT,
-                likes INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-
-        // Create votes table (prevent duplicate likes)
-        await db.exec(`
-            CREATE TABLE IF NOT EXISTS votes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                artwork_id INTEGER,
-                voter_ip TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(artwork_id, voter_ip)
-            )
-        `);
-
-        console.log('✅ Database initialized successfully');
-        
-        // Add sample artworks if empty
-        const count = await db.get('SELECT COUNT(*) as count FROM artworks');
-        if (count.count === 0) {
-            await addSampleArtworks();
-        }
-        
-    } catch (error) {
-        console.error('❌ Database initialization failed:', error);
-    }
-})();
-
-// Add sample artworks
-async function addSampleArtworks() {
-    const samples = [
-        {
-            prompt: "Fire Dragon Horse with golden scales, surrounded by cryptocurrency symbols, futuristic",
-            image_url: "https://images.unsplash.com/photo-1546182990-dffeafbe841d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-            style: "digital"
-        },
-        {
-            prompt: "Chinese ink painting style fire horse, traditional art with modern elements",
-            image_url: "https://images.unsplash.com/photo-1545569341-9eb8b30979d9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-            style: "chinese"
-        },
-        {
-            prompt: "Cyberpunk fire horse with mechanical armor, neon city background",
-            image_url: "https://images.unsplash.com/photo-1518709268805-4e9042af2176?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-            style: "cyberpunk"
-        },
-        {
-            prompt: "Fantasy fire horse with magic runes, epic landscape, digital painting",
-            image_url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-            style: "fantasy"
-        },
-        {
-            prompt: "Fire horse running through digital universe, crypto coins flowing",
-            image_url: "https://images.unsplash.com/photo-1519681393784-d120267933ba?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-            style: "digital"
-        },
-        {
-            prompt: "Traditional Chinese fire horse with modern digital art fusion",
-            image_url: "https://images.unsplash.com/photo-1500462918059-b1a0cb512f1d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-            style: "chinese"
-        }
-    ];
-
-    for (const artwork of samples) {
-        await db.run(
-            'INSERT INTO artworks (prompt, image_url, style, likes) VALUES (?, ?, ?, ?)',
-            [artwork.prompt, artwork.image_url, artwork.style, Math.floor(Math.random() * 50) + 10]
-        );
-    }
-    console.log('✅ Sample artworks added');
-}
-
-// ============ API ENDPOINTS ============
+console.log('='.repeat(60));
+console.log('🎨 Gemini Image Generation API Gateway');
+console.log('='.repeat(60));
+console.log('Service: Gemini AI via mmw.ink proxy');
+console.log('API Key:', GEMINI_API_KEY.substring(0, 12) + '...');
+console.log('Base URL:', GEMINI_BASE_URL);
+console.log('Model:', GEMINI_MODEL);
+console.log('Purchase: Nano Banana 200次调用');
+console.log('='.repeat(60));
 
 // Health check
 app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'Gemini Image Generation API',
+    config: {
+      base_url: GEMINI_BASE_URL,
+      model: GEMINI_MODEL,
+      key_configured: true
+    },
+    endpoints: {
+      health: '/health',
+      test: '/test-gemini',
+      generate: '/generate'
+    },
+    usage: '200 calls total (Nano Banana Pro 2.0)'
+  });
+});
+
+// Test Gemini API connection
+app.get('/test-gemini', async (req, res) => {
+  console.log('Testing Gemini API connection...');
+  
+  try {
+    // Test 1: Try with Bearer token (as shown in Python code)
+    const testResponse = await axios.post(
+      `${GEMINI_BASE_URL}/v1/models/${GEMINI_MODEL}:generateContent`,
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: "a simple test image"
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseModalities: ["TEXT"], // Just test with text response
+          temperature: 0.7
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${GEMINI_API_KEY}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 30000,
+        validateStatus: () => true // Accept all status codes
+      }
+    );
+    
     res.json({
-        status: 'ok',
-        service: 'Fire Horse Art Generator',
-        version: '2.0.0',
-        features: ['generate', 'gallery', 'likes'],
-        timestamp: new Date().toISOString()
+      test: 'completed',
+      method: 'Bearer token',
+      status: testResponse.status,
+      success: testResponse.status < 400,
+      response: testResponse.data,
+      suggestion: testResponse.status === 200 ? 
+        'API is working! Try /generate endpoint' :
+        'Check API key format'
     });
+    
+  } catch (error) {
+    res.json({
+      test: 'failed',
+      error: error.code || error.message,
+      message: error.message,
+      suggestion: 'Contact seller if API key is not working'
+    });
+  }
 });
 
-// Generate new artwork
-app.post('/api/generate', async (req, res) => {
-    const { prompt, style = 'digital', user_agent = '' } = req.body;
-    const userIp = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-
-    if (!prompt || prompt.trim().length < 3) {
-        return res.status(400).json({ success: false, error: 'Prompt is required (min 3 characters)' });
+// Main generation endpoint - Gemini API format
+app.post('/generate', async (req, res) => {
+  const { prompt, image_size = "2K" } = req.body;
+  
+  if (!prompt) {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
+  
+  // Validate image size
+  const validSizes = ["1K", "2K", "4K"];
+  const size = validSizes.includes(image_size.toUpperCase()) ? image_size.toUpperCase() : "2K";
+  
+  console.log(`Generating image: "${prompt.substring(0, 50)}..."`);
+  console.log(`Size: ${size}, Model: ${GEMINI_MODEL}`);
+  
+  const apiUrl = `${GEMINI_BASE_URL}/v1/models/${GEMINI_MODEL}:generateContent`;
+  
+  try {
+    // Prepare request in Gemini API format
+    const requestBody = {
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: prompt
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseModalities: ["IMAGE", "TEXT"],
+        imageConfig: {
+          imageSize: size
+        },
+        temperature: 0.7,
+        maxOutputTokens: 2048
+      }
+    };
+    
+    console.log('Sending to Gemini API:', apiUrl);
+    
+    // Try with Bearer token first (as shown in Python code)
+    const response = await axios.post(
+      apiUrl,
+      requestBody,
+      {
+        headers: {
+          'Authorization': `Bearer ${GEMINI_API_KEY}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 300000 // 5 minutes for image generation
+      }
+    );
+    
+    console.log('Gemini API response status:', response.status);
+    
+    // Parse Gemini API response
+    let imageData = null;
+    let imageUrl = null;
+    let texts = [];
+    
+    // Check for inline image data
+    const candidates = response.data.candidates || [];
+    for (const candidate of candidates) {
+      const content = candidate.content;
+      if (content && content.parts) {
+        for (const part of content.parts) {
+          // Check for inline image data
+          if (part.inlineData && part.inlineData.data) {
+            imageData = part.inlineData.data;
+          }
+          // Check for text that might contain URLs
+          if (part.text) {
+            texts.push(part.text);
+            // Extract URLs from text
+            const urlRegex = /https?:\/\/[^\s)]+/g;
+            const urls = part.text.match(urlRegex);
+            if (urls && urls.length > 0 && !imageUrl) {
+              imageUrl = urls[0];
+            }
+          }
+        }
+      }
     }
-
-    console.log(`🎨 Generating: "${prompt.substring(0, 50)}..."`);
-
-    try {
-        // Enhance prompt with fire horse theme
-        let enhancedPrompt = prompt.toLowerCase().includes('fire') && 
-                            (prompt.toLowerCase().includes('horse') || prompt.toLowerCase().includes('dragon')) 
-            ? prompt 
-            : `Fire Dragon Horse, ${prompt}, golden scales, flames, cryptocurrency elements, Chinese New Year theme`;
-
-        // Add style-specific enhancements
-        const styleEnhancements = {
-            'digital': 'digital art, futuristic, cyber elements',
-            'chinese': 'Chinese ink painting, traditional style',
-            'cyberpunk': 'cyberpunk, neon, mechanical',
-            'fantasy': 'fantasy, magical, epic'
-        };
+    
+    // If we have inline image data, convert to data URL
+    if (imageData) {
+      const imageBuffer = Buffer.from(imageData, 'base64');
+      const dataUrl = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+      
+      res.json({
+        success: true,
+        image_url: dataUrl,
+        image_data: imageData.substring(0, 100) + '...', // First 100 chars
+        format: 'base64',
+        model: GEMINI_MODEL,
+        size: size,
+        prompt: prompt,
+        remaining_calls: '200 total (Nano Banana)',
+        note: 'Image sent as base64 data URL'
+      });
+      
+    } 
+    // If we found an image URL
+    else if (imageUrl) {
+      res.json({
+        success: true,
+        image_url: imageUrl,
+        model: GEMINI_MODEL,
+        size: size,
+        prompt: prompt,
+        remaining_calls: '200 total (Nano Banana)',
+        note: 'Image available at the URL above'
+      });
+      
+    } 
+    // If no image found
+    else {
+      // Try to download from any URLs found in text
+      if (texts.length > 0) {
+        const allText = texts.join(' ');
+        const urlRegex = /https?:\/\/[^\s)]+/g;
+        const allUrls = allText.match(urlRegex) || [];
         
-        enhancedPrompt += `, ${styleEnhancements[style] || styleEnhancements.digital}`;
-
-        // Call Gemini API
-        const response = await axios.post(
-            `${GEMINI_BASE_URL}/v1/models/${GEMINI_MODEL}:generateContent`,
-            {
-                contents: [{
-                    role: "user",
-                    parts: [{ text: enhancedPrompt }]
-                }],
-                generationConfig: {
-                    responseModalities: ["IMAGE"],
-                    imageConfig: { imageSize: "2K" }
-                }
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${GEMINI_API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 300000 // 5 minutes
-            }
-        );
-
-        // Parse response for image
-        let imageUrl = null;
-        const candidates = response.data.candidates || [];
-
-        for (const candidate of candidates) {
-            if (candidate.content?.parts) {
-                for (const part of candidate.content.parts) {
-                    if (part.inlineData?.data) {
-                        // Convert to data URL
-                        imageUrl = `data:image/png;base64,${part.inlineData.data}`;
-                        break;
-                    }
-                }
-            }
-            if (imageUrl) break;
-        }
-
-        // Fallback to Unsplash if no image
-        if (!imageUrl) {
-            const fallbackImages = {
-                'digital': 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-                'chinese': 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-                'cyberpunk': 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-                'fantasy': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
-            };
-            imageUrl = fallbackImages[style] || fallbackImages.digital;
-        }
-
-        // Save to database
-        const result = await db.run(
-            'INSERT INTO artworks (prompt, image_url, style, user_ip, user_agent) VALUES (?, ?, ?, ?, ?)',
-            [enhancedPrompt, imageUrl, style, userIp, user_agent]
-        );
-
-        const newArtwork = await db.get('SELECT * FROM artworks WHERE id = ?', [result.lastID]);
-
-        res.json({
+        if (allUrls.length > 0) {
+          res.json({
             success: true,
-            artwork: newArtwork,
-            message: 'Fire Horse artwork created successfully!'
-        });
-
-    } catch (error) {
-        console.error('Generation error:', error.message);
-
-        // Fallback response
-        const fallbackImages = {
-            'digital': 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-            'chinese': 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-            'cyberpunk': 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-            'fantasy': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
-        };
-        const imageUrl = fallbackImages[style] || fallbackImages.digital;
-
-        const result = await db.run(
-            'INSERT INTO artworks (prompt, image_url, style, user_ip, user_agent) VALUES (?, ?, ?, ?, ?)',
-            [`${prompt} (demo mode)`, imageUrl, style, userIp, user_agent]
-        );
-
-        const newArtwork = await db.get('SELECT * FROM artworks WHERE id = ?', [result.lastID]);
-
-        res.json({
-            success: true,
-            artwork: newArtwork,
-            message: 'Fire Horse artwork created! (Demo mode)'
-        });
-    }
-});
-
-// Get gallery artworks
-app.get('/api/gallery', async (req, res) => {
-    try {
-        const { page = 1, limit = 12, sort = 'newest', style } = req.query;
-        const offset = (page - 1) * limit;
-
-        let orderBy = 'created_at DESC';
-        if (sort === 'popular') orderBy = 'likes DESC';
-        if (sort === 'random') orderBy = 'RANDOM()';
-
-        let query = 'SELECT * FROM artworks';
-        const params = [];
-
-        if (style && style !== 'all') {
-            query += ' WHERE style = ?';
-            params.push(style);
-        }
-
-        query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
-        params.push(parseInt(limit), parseInt(offset));
-
-        const artworks = await db.all(query, params);
-        const total = await db.get('SELECT COUNT(*) as count FROM artworks' + (style && style !== 'all' ? ' WHERE style = ?' : ''), 
-                                  style && style !== 'all' ? [style] : []);
-
-        res.json({
-            success: true,
-            artworks,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total: total.count,
-                totalPages: Math.ceil(total.count / limit)
-            }
-        });
-    } catch (error) {
-        console.error('Gallery error:', error);
-        res.status(500).json({ success: false, error: 'Server error' });
-    }
-});
-
-// Get single artwork
-app.get('/api/artwork/:id', async (req, res) => {
-    try {
-        const artwork = await db.get(
-            'SELECT * FROM artworks WHERE id = ?',
-            [req.params.id]
-        );
-
-        if (artwork) {
-            res.json({ success: true, artwork });
+            image_url: allUrls[0],
+            alternative_urls: allUrls.slice(1),
+            model: GEMINI_MODEL,
+            size: size,
+            prompt: prompt,
+            remaining_calls: '200 total (Nano Banana)',
+            note: 'Found URL in response text'
+          });
         } else {
-            res.status(404).json({ success: false, error: 'Artwork not found' });
+          res.json({
+            success: false,
+            message: 'No image found in response',
+            text_response: texts,
+            full_response: response.data,
+            suggestion: 'Try a different prompt'
+          });
         }
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Server error' });
-    }
-});
-
-// Like artwork
-app.post('/api/artwork/:id/like', async (req, res) => {
-    try {
-        const artworkId = req.params.id;
-        const userIp = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-
-        // Check if already liked
-        const existingVote = await db.get(
-            'SELECT * FROM votes WHERE artwork_id = ? AND voter_ip = ?',
-            [artworkId, userIp]
-        );
-
-        if (existingVote) {
-            return res.json({ success: false, message: 'You already liked this artwork' });
-        }
-
-        // Record vote
-        await db.run(
-            'INSERT INTO votes (artwork_id, voter_ip) VALUES (?, ?)',
-            [artworkId, userIp]
-        );
-
-        // Update likes count
-        await db.run(
-            'UPDATE artworks SET likes = likes + 1 WHERE id = ?',
-            [artworkId]
-        );
-
-        const updated = await db.get('SELECT likes FROM artworks WHERE id = ?', [artworkId]);
-
+      } else {
         res.json({
-            success: true,
-            message: 'Liked successfully!',
-            likes: updated.likes
+          success: false,
+          message: 'No image or text in response',
+          full_response: response.data
         });
-    } catch (error) {
-        console.error('Like error:', error);
-        res.status(500).json({ success: false, error: 'Server error' });
+      }
     }
-});
-
-// Get statistics
-app.get('/api/stats', async (req, res) => {
-    try {
-        const totalArtworks = await db.get('SELECT COUNT(*) as count FROM artworks');
-        const totalLikes = await db.get('SELECT SUM(likes) as total FROM artworks');
-        const today = new Date().toISOString().split('T')[0];
-        const todayArtworks = await db.get(
-            'SELECT COUNT(*) as count FROM artworks WHERE date(created_at) = ?',
-            [today]
+    
+  } catch (error) {
+    console.error('Gemini API Error:', error.message);
+    
+    // Try alternative API key format if Bearer fails
+    if (error.response && error.response.status === 401) {
+      console.log('Trying alternative API key format...');
+      
+      try {
+        // Try with API key in query parameter or different header
+        const altResponse = await axios.post(
+          `${GEMINI_BASE_URL}/generate`,
+          {
+            prompt: prompt,
+            model: GEMINI_MODEL,
+            size: size
+          },
+          {
+            headers: {
+              'X-API-Key': GEMINI_API_KEY,
+              'Content-Type': 'application/json'
+            },
+            timeout: 300000
+          }
         );
-
-        res.json({
-            success: true,
-            stats: {
-                totalArtworks: totalArtworks.count,
-                totalLikes: totalLikes.total || 0,
-                todayArtworks: todayArtworks.count,
-                averageLikes: totalLikes.total ? (totalLikes.total / totalArtworks.count).toFixed(1) : 0
-            }
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Server error' });
-    }
-});
-
-// Search artworks
-app.get('/api/search', async (req, res) => {
-    try {
-        const { q, limit = 20 } = req.query;
         
-        if (!q || q.trim().length < 2) {
-            return res.status(400).json({ success: false, error: 'Search query too short' });
-        }
-
-        const artworks = await db.all(
-            'SELECT * FROM artworks WHERE prompt LIKE ? ORDER BY created_at DESC LIMIT ?',
-            [`%${q}%`, parseInt(limit)]
-        );
-
-        res.json({
+        if (altResponse.data && altResponse.data.image_url) {
+          res.json({
             success: true,
-            artworks,
-            count: artworks.length
+            image_url: altResponse.data.image_url,
+            method: 'Alternative format',
+            model: GEMINI_MODEL,
+            size: size,
+            prompt: prompt
+          });
+        } else {
+          throw new Error('Alternative format also failed');
+        }
+        
+      } catch (altError) {
+        res.status(500).json({
+          error: 'Gemini API authentication failed',
+          details: 'Both Bearer token and alternative formats failed',
+          status: error.response?.status || altError.response?.status,
+          suggestion: '1. Check API key is correct\n2. Contact seller\n3. Check tutorial document'
         });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Server error' });
+      }
+      
+    } else if (error.response) {
+      res.status(error.response.status).json({
+        error: 'Gemini API Error',
+        status: error.response.status,
+        details: error.response.data,
+        url: apiUrl,
+        suggestion: 'Check the API endpoint format'
+      });
+    } else if (error.request) {
+      res.status(504).json({
+        error: 'Connection failed',
+        message: 'Cannot connect to Gemini API',
+        url: apiUrl,
+        suggestion: '1. Check if https://api.mmw.ink is accessible\n2. Contact seller'
+      });
+    } else {
+      res.status(500).json({
+        error: 'Internal error',
+        message: error.message
+      });
     }
+  }
 });
 
-// Serve HTML pages
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+// Simple text-to-image endpoint
+app.post('/simple-generate', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    
+    if (!prompt) {
+      return res.json({ error: 'Prompt required' });
+    }
+    
+    const response = await axios.post(
+      `${GEMINI_BASE_URL}/v1/models/${GEMINI_MODEL}:generateContent`,
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: prompt
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseModalities: ["IMAGE"],
+          imageConfig: {
+            imageSize: "2K"
+          }
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${GEMINI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 180000
+      }
+    );
+    
+    res.json({
+      success: true,
+      data: response.data,
+      note: 'Check candidates[0].content.parts for image data'
+    });
+    
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      data: error.response?.data
+    });
+  }
 });
 
-app.get('/gallery', (req, res) => {
-    res.sendFile(path.join(__dirname, 'gallery.html'));
+// Check remaining calls/balance
+app.get('/balance', async (req, res) => {
+  try {
+    // Try to get account info
+    const response = await axios.get(
+      `${GEMINI_BASE_URL}/v1/usage`,
+      {
+        headers: {
+          'Authorization': `Bearer ${GEMINI_API_KEY}`,
+          'Accept': 'application/json'
+        },
+        timeout: 10000,
+        validateStatus: () => true
+      }
+    );
+    
+    if (response.status === 200) {
+      res.json({
+        success: true,
+        usage: response.data,
+        purchased: '200 calls (Nano Banana Pro 2.0)'
+      });
+    } else {
+      res.json({
+        success: false,
+        status: response.status,
+        message: 'Usage endpoint not available',
+        purchased: '200 calls total from purchase'
+      });
+    }
+    
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      purchased: '200 calls (Nano Banana Pro 2.0)',
+      note: 'Check with seller for exact remaining balance'
+    });
+  }
 });
 
-// Start server
 app.listen(PORT, () => {
-    console.log('='.repeat(60));
-    console.log('🔥 Fire Horse Art Generator API');
-    console.log('='.repeat(60));
-    console.log(`🌐 Server: http://localhost:${PORT}`);
-    console.log('📁 Database: gallery.db');
-    console.log('📊 Endpoints:');
-    console.log('  POST /api/generate     - Generate artwork');
-    console.log('  GET  /api/gallery      - Browse gallery');
-    console.log('  POST /api/artwork/:id/like - Like artwork');
-    console.log('  GET  /api/stats        - Get statistics');
-    console.log('  GET  /api/search?q=    - Search artworks');
-    console.log('='.repeat(60));
+  console.log(`🚀 Gemini API Gateway running on port ${PORT}`);
+  console.log('\n📋 Available Endpoints:');
+  console.log(`  Health:          https://comfyui-proxy.onrender.com/health`);
+  console.log(`  Test API:        https://comfyui-proxy.onrender.com/test-gemini`);
+  console.log(`  Check balance:   https://comfyui-proxy.onrender.com/balance`);
+  console.log(`  Simple generate: POST https://comfyui-proxy.onrender.com/simple-generate`);
+  console.log(`  Generate image:  POST https://comfyui-proxy.onrender.com/generate`);
+  console.log('\n🎨 Example curl command:');
+  console.log(`  curl -X POST https://comfyui-proxy.onrender.com/generate \\`);
+  console.log(`    -H "Content-Type: application/json" \\`);
+  console.log(`    -d '{"prompt":"a beautiful sunset", "image_size":"2K"}'`);
+  console.log('\n⚠️  Note: This is a Gemini AI service, not ComfyUI');
 });
