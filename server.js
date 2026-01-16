@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai/node";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
