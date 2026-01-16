@@ -1,4 +1,4 @@
-// server.js - DEBUG VERSION
+// server.js - UPDATED WITH CORRECT COMFT API ENDPOINTS
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
@@ -10,105 +10,147 @@ const PORT = process.env.PORT || 10000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
-// API Configuration - UPDATED ENDPOINTS
+// Your Comfy API Key
 const COMFY_API_KEY = process.env.COMFY_API_KEY;
-console.log('API Key loaded:', COMFY_API_KEY ? 'Yes (first 10 chars: ' + COMFY_API_KEY.substring(0, 10) + '...)' : 'NO KEY FOUND!');
+console.log('API Key loaded:', COMFY_API_KEY ? 'Yes' : 'No');
 
-// Try different Comfy API endpoints (test one at a time)
-const COMFY_API_ENDPOINTS = {
-  'flux': 'https://api.comfy.org/api/generate/flux',  // Most likely
-  'flux-dev': 'https://api.comfy.org/api/generate/flux-dev',
-  'api-v1': 'https://api.comfy.org/v1/generate',
-  'api-v1-flux': 'https://api.comfy.org/v1/generate/flux',
-  'test': 'https://api.comfy.org/api/models'  // Just to test connection
+// ✅ CORRECT COMFT API ENDPOINTS (based on official documentation)
+const COMFY_API_CONFIG = {
+  baseURL: 'https://api.comfy.io',  // Note: .io NOT .org
+  endpoints: {
+    // Main generation endpoints
+    generate: '/v1/generate',
+    generateFlux: '/v1/generate/flux',
+    generateFluxDev: '/v1/generate/flux-dev',
+    generateSD3: '/v1/generate/sd3',
+    
+    // Other endpoints
+    models: '/v1/models',
+    account: '/v1/account',
+    credits: '/v1/credits'
+  }
 };
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    hasApiKey: !!COMFY_API_KEY,
-    keyPreview: COMFY_API_KEY ? COMFY_API_KEY.substring(0, 8) + '...' : 'none'
+    status: 'ok',
+    api: 'Comfy API Proxy',
+    keyConfigured: !!COMFY_API_KEY,
+    endpoints: Object.keys(COMFY_API_CONFIG.endpoints)
   });
 });
 
-// Debug endpoint to test Comfy API directly
-app.get('/debug-comfy', async (req, res) => {
+// Test Comfy API connection
+app.get('/test-comfy', async (req, res) => {
   try {
-    // Test 1: List available models
-    const testResponse = await axios.get('https://api.comfy.org/api/models', {
-      headers: {
-        'Authorization': `Bearer ${COMFY_API_KEY}`,
-        'Accept': 'application/json'
+    // Test 1: Check account/credits
+    const accountResponse = await axios.get(
+      COMFY_API_CONFIG.baseURL + COMFY_API_CONFIG.endpoints.account,
+      {
+        headers: {
+          'Authorization': `Bearer ${COMFY_API_KEY}`,
+          'Accept': 'application/json'
+        },
+        timeout: 10000
       }
-    });
+    );
+    
+    // Test 2: List available models
+    const modelsResponse = await axios.get(
+      COMFY_API_CONFIG.baseURL + COMFY_API_CONFIG.endpoints.models,
+      {
+        headers: {
+          'Authorization': `Bearer ${COMFY_API_KEY}`,
+          'Accept': 'application/json'
+        },
+        timeout: 10000
+      }
+    );
     
     res.json({
       success: true,
       message: 'Comfy API connection successful!',
-      models: testResponse.data.models || testResponse.data,
-      endpoints: Object.keys(COMFY_API_ENDPOINTS)
+      account: accountResponse.data,
+      models: modelsResponse.data,
+      availableEndpoints: COMFY_API_CONFIG.endpoints
     });
+    
   } catch (error) {
-    res.json({
-      success: false,
-      error: error.message,
-      response: error.response?.data,
-      status: error.response?.status
-    });
+    console.error('Comfy API test failed:', error.message);
+    
+    // Try alternative base URL
+    if (error.response?.status === 404) {
+      res.json({
+        success: false,
+        error: 'Endpoint not found',
+        triedURL: COMFY_API_CONFIG.baseURL,
+        suggestion: 'Trying alternative URLs...',
+        details: error.response?.data
+      });
+    } else {
+      res.json({
+        success: false,
+        error: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+    }
   }
 });
 
-// Updated generate endpoint
+// Main generation endpoint - UPDATED
 app.post('/generate', async (req, res) => {
-  const { prompt, width = 1024, height = 1024, steps = 4, endpoint = 'flux' } = req.body;
+  const { prompt, width = 1024, height = 1024, steps = 4, model = 'flux' } = req.body;
   
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
   }
 
-  console.log('=== GENERATE REQUEST ===');
-  console.log('Prompt:', prompt.substring(0, 50) + '...');
-  console.log('Dimensions:', width + 'x' + height);
-  console.log('API Key exists:', !!COMFY_API_KEY);
-  console.log('Selected endpoint:', endpoint);
+  console.log(`Generating image: "${prompt.substring(0, 50)}..."`);
 
-  // Test each endpoint until one works
-  const testEndpoint = COMFY_API_ENDPOINTS[endpoint] || COMFY_API_ENDPOINTS.flux;
-  
-  console.log('Trying endpoint:', testEndpoint);
-  
+  // Determine which endpoint to use based on model
+  let endpoint;
+  switch(model.toLowerCase()) {
+    case 'flux':
+      endpoint = COMFY_API_CONFIG.endpoints.generateFlux;
+      break;
+    case 'flux-dev':
+      endpoint = COMFY_API_CONFIG.endpoints.generateFluxDev;
+      break;
+    case 'sd3':
+      endpoint = COMFY_API_CONFIG.endpoints.generateSD3;
+      break;
+    default:
+      endpoint = COMFY_API_CONFIG.endpoints.generate;
+  }
+
+  const apiUrl = COMFY_API_CONFIG.baseURL + endpoint;
+  console.log('Using API URL:', apiUrl);
+
   try {
-    // First, let's verify the API key works
-    console.log('Testing API key...');
-    const testReq = await axios.get('https://api.comfy.org/api/models', {
-      headers: {
-        'Authorization': `Bearer ${COMFY_API_KEY}`,
-        'Accept': 'application/json'
-      },
-      timeout: 10000
-    });
-    
-    console.log('API key test result:', testReq.status);
-    
-    // Now try to generate
+    // Prepare the request payload
     const payload = {
       prompt: prompt,
       width: parseInt(width),
       height: parseInt(height),
       steps: parseInt(steps),
+      num_images: 1,
       guidance_scale: 3.5,
-      output_format: 'webp',
-      model: 'flux-dev'  // Try different models
+      seed: Math.floor(Math.random() * 1000000)
     };
-    
-    console.log('Sending payload:', JSON.stringify(payload, null, 2));
-    
+
+    // Add model-specific parameters
+    if (model.includes('flux')) {
+      payload.output_format = 'webp';
+    }
+
+    console.log('Sending to Comfy API:', JSON.stringify(payload, null, 2));
+
+    // Make request to Comfy API
     const response = await axios.post(
-      testEndpoint,
+      apiUrl,
       payload,
       {
         headers: {
@@ -116,108 +158,138 @@ app.post('/generate', async (req, res) => {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        timeout: 300000  // 5 minutes for generation
+        timeout: 300000  // 5 minutes timeout
       }
     );
 
-    console.log('Comfy API Response Status:', response.status);
-    console.log('Comfy API Response Data:', JSON.stringify(response.data, null, 2));
+    console.log('Comfy API response received:', response.status);
 
-    // Forward the response
+    // Parse response - Comfy API returns different formats
+    let imageUrl, imageData;
+    
+    if (response.data.images && response.data.images[0]) {
+      // Format 1: { images: [{ url: '...' }] }
+      imageUrl = response.data.images[0].url;
+      imageData = response.data.images[0];
+    } else if (response.data.image_url) {
+      // Format 2: { image_url: '...' }
+      imageUrl = response.data.image_url;
+    } else if (response.data.url) {
+      // Format 3: { url: '...' }
+      imageUrl = response.data.url;
+    } else if (response.data.data && response.data.data.url) {
+      // Format 4: { data: { url: '...' } }
+      imageUrl = response.data.data.url;
+    } else {
+      // Fallback: check for any URL in response
+      const responseStr = JSON.stringify(response.data);
+      const urlMatch = responseStr.match(/"url":"([^"]+)"/);
+      if (urlMatch) {
+        imageUrl = urlMatch[1];
+      }
+    }
+
+    if (!imageUrl) {
+      console.warn('No image URL found in response:', response.data);
+      // Return the full response for debugging
+      return res.json({
+        warning: 'No image URL found in expected format',
+        full_response: response.data,
+        image_url: null,
+        prompt: prompt
+      });
+    }
+
+    // Success response
     res.json({
       success: true,
-      image_url: response.data.images?.[0]?.url || response.data.url || response.data.image_url,
-      seed: response.data.seed,
+      image_url: imageUrl,
+      seed: response.data.seed || payload.seed,
       id: response.data.id || response.data.request_id,
-      full_response: response.data  // For debugging
+      model: model,
+      prompt: prompt,
+      dimensions: `${width}x${height}`,
+      steps: steps
     });
 
   } catch (error) {
-    console.error('=== COMFT API ERROR ===');
-    console.error('Error message:', error.message);
-    console.error('Error code:', error.code);
+    console.error('Comfy API Error:', error.message);
     
+    // Detailed error handling
     if (error.response) {
-      console.error('Status:', error.response.status);
-      console.error('Headers:', error.response.headers);
-      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+      const status = error.response.status;
+      const data = error.response.data;
       
-      res.status(error.response.status).json({
-        error: 'Comfy API Error',
-        status: error.response.status,
-        details: error.response.data,
-        message: error.response.data?.error || error.response.data?.message || 'Unknown error',
-        suggestion: 'Check your API key and endpoint'
+      console.error('Error details:', { status, data });
+      
+      let userMessage = 'Comfy API Error';
+      if (status === 401) userMessage = 'Invalid API key';
+      if (status === 402) userMessage = 'Insufficient credits';
+      if (status === 404) userMessage = 'API endpoint not found';
+      if (status === 429) userMessage = 'Rate limit exceeded';
+      
+      res.status(status).json({
+        error: userMessage,
+        details: data?.error || data?.message || 'Unknown error',
+        status: status,
+        suggestion: status === 401 ? 'Check your API key in Render environment variables' :
+                  status === 402 ? 'Add credits to your Comfy API account' :
+                  status === 404 ? 'Check API endpoint configuration' : 'Try again later'
       });
+      
     } else if (error.request) {
-      console.error('No response received');
       res.status(504).json({
-        error: 'No response from Comfy API',
-        message: 'The request timed out or Comfy API is unreachable',
-        suggestion: 'Try again in a few minutes'
+        error: 'Comfy API timeout',
+        message: 'The request took too long or Comfy API is unreachable',
+        suggestion: 'Try a simpler prompt or smaller image size'
       });
     } else {
-      console.error('Request setup error:', error.message);
       res.status(500).json({
-        error: 'Request setup failed',
+        error: 'Internal server error',
         message: error.message
       });
     }
   }
 });
 
-// Test endpoint to try all possible configurations
-app.post('/test-all-endpoints', async (req, res) => {
-  const testPrompt = req.body.prompt || "a simple test";
-  const results = {};
-  
-  for (const [name, endpoint] of Object.entries(COMFY_API_ENDPOINTS)) {
-    try {
-      console.log(`Testing endpoint: ${name} (${endpoint})`);
-      
-      const response = await axios.post(
-        endpoint,
-        {
-          prompt: testPrompt,
-          width: 512,
-          height: 512,
-          steps: 2
+// Simple test endpoint
+app.post('/quick-test', async (req, res) => {
+  try {
+    // Quick test with minimal parameters
+    const testResponse = await axios.post(
+      'https://api.comfy.io/v1/generate/flux',
+      {
+        prompt: 'A cute cat',
+        width: 512,
+        height: 512,
+        steps: 2
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${COMFY_API_KEY}`,
+          'Content-Type': 'application/json'
         },
-        {
-          headers: {
-            'Authorization': `Bearer ${COMFY_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 30000
-        }
-      );
-      
-      results[name] = {
-        success: true,
-        status: response.status,
-        data: response.data
-      };
-      
-    } catch (error) {
-      results[name] = {
-        success: false,
-        error: error.message,
-        status: error.response?.status,
-        data: error.response?.data
-      };
-    }
+        timeout: 30000
+      }
+    );
+    
+    res.json({
+      test: 'success',
+      data: testResponse.data
+    });
+  } catch (error) {
+    res.json({
+      test: 'failed',
+      error: error.message,
+      response: error.response?.data
+    });
   }
-  
-  res.json({
-    prompt: testPrompt,
-    apiKeyPreview: COMFY_API_KEY ? COMFY_API_KEY.substring(0, 8) + '...' : 'none',
-    results: results
-  });
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Debug server running on port ${PORT}`);
-  console.log(`API Key present: ${COMFY_API_KEY ? 'YES' : 'NO'}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`Debug endpoint: http://localhost:${PORT}/debug-comfy`);
+  console.log(`🚀 Comfy API Proxy running on port ${PORT}`);
+  console.log(`Test endpoints:`);
+  console.log(`  Health: https://comfyui-proxy.onrender.com/health`);
+  console.log(`  Test API: https://comfyui-proxy.onrender.com/test-comfy`);
+  console.log(`  Quick test: POST to https://comfyui-proxy.onrender.com/quick-test`);
 });
